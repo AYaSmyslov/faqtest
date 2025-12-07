@@ -231,3 +231,12 @@ curl -X DELETE http://localhost:8080/answers/10
 ```
 Response: `204 No Content`
 If the answer is not fount: `404 Not Found`
+
+---
+
+## Testing
+Test POST request to create question and GET created question
+Run:
+```bash
+go test ./internal/http/
+```
