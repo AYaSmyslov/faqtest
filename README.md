@@ -123,7 +123,7 @@ Request body:
 }
 ```
 Request:
-```json
+```bash
 curl -X POST http://localhost:8080/questions/ \
     -H "Content-Type: application/json" \
     -d '{"text": "New question"}'
