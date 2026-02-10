@@ -1,13 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sort"
 	"strings"
 
-	"github.com/AYaSmyslov/faqapi/internal/service"
+	"github.com/AYaSmyslov/faqapi/internal/models"
+	// "github.com/AYaSmyslov/faqapi/internal/service"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
@@ -44,12 +46,23 @@ func (m methodMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
+type Service interface {
+	CreateQuestion(ctx context.Context, text string) (*models.Question, error)
+	ListQuestions(ctx context.Context) ([]models.Question, error)
+	GetQuestionWithAnswers(ctx context.Context, id uint) (*models.Question, error)
+	DeleteQuestion(ctx context.Context, id uint) error
+
+	CreateAnswer(ctx context.Context, questionID uint, userID, text string) (*models.Answer, error)
+	GetAnswer(ctx context.Context, id uint) (*models.Answer, error)
+	DeleteAnswer(ctx context.Context, id uint) error
+}
+
 type Server struct {
-	svc *service.FAQService
+	svc Service
 	mux *http.ServeMux
 }
 
-func NewServer(svc *service.FAQService) *Server {
+func NewServer(svc Service) *Server {
 	server := &Server{
 		svc: svc,
 		mux: http.NewServeMux(),
