@@ -8,9 +8,10 @@ and answers (`Answer`), stores data in PostgreSQL and uses migrations via `goose
 ## Technologies
 
 - Go
+- swagger
 - GORM
 - PostgreSQL
-- Goose:
+- Goose
 - Docker + docker-compose
 
 ---
@@ -55,6 +56,10 @@ Examples of migration files:
 - `20251204121000_create_answers.sql` - creating the answer table and foreign key with `ON DELETE CASCADE`
 
 ---
+
+## API documentation (Swagger)
+Swagger UI is available when the server is running:
+- `http://localhsot:8080/swagger`
 
 ## API
 ## Models

@@ -1,0 +1,231 @@
+basePath: /
+definitions:
+  httpapi.createAnswerRequest:
+    properties:
+      text:
+        example: New Answer
+        type: string
+      user_id:
+        example: USER_NAME
+        type: string
+    type: object
+  httpapi.createQuestionRequest:
+    properties:
+      text:
+        example: New question
+        type: string
+    type: object
+  models.Answer:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      qusetion_id:
+        type: integer
+      text:
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.Question:
+    properties:
+      answers:
+        items:
+          $ref: '#/definitions/models.Answer'
+        type: array
+      created_at:
+        type: string
+      id:
+        type: integer
+      text:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: REST API DOC
+  title: frequently asked questions api
+  version: "1.0"
+paths:
+  /answers/{answerID}:
+    delete:
+      description: Delete answer by ID
+      parameters:
+      - description: Answer ID
+        in: path
+        name: answerID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: answer
+      tags:
+      - answers
+    get:
+      parameters:
+      - description: Answer ID
+        in: path
+        name: answerID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Answer'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get answer by ID
+      tags:
+      - answers
+  /questions:
+    get:
+      description: returns questions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Question'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List questions
+      tags:
+      - questions
+    post:
+      consumes:
+      - application/json
+      description: create and returns created question
+      parameters:
+      - description: Question payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.createQuestionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Question'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create question
+      tags:
+      - questions
+  /questions/{questionID}:
+    delete:
+      description: Delete question by ID
+      parameters:
+      - description: Question ID
+        in: path
+        name: questionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete question
+      tags:
+      - questions
+    get:
+      parameters:
+      - description: Question ID
+        in: path
+        name: questionID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Question'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: get question by ID
+      tags:
+      - questions
+  /questions/{questionID}/answers:
+    post:
+      consumes:
+      - application/json
+      description: Create and returns created answer
+      parameters:
+      - description: Question ID
+        in: path
+        name: questionID
+        required: true
+        type: integer
+      - description: Answer payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.createAnswerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Answer'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create answer
+      tags:
+      - answers
+swagger: "2.0"
