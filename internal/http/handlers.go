@@ -4,12 +4,45 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
+	"sort"
 	"strings"
-	"time"
 
 	"github.com/AYaSmyslov/faqapi/internal/service"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
+
+type createQuestionRequest struct {
+	Text string `json:"text" example:"New question"`
+}
+
+type createAnswerRequest struct {
+	UserID string `json:"user_id" example:"USER_NAME"`
+	Text   string `json:"text" example:"New Answer"`
+}
+
+type methodMux map[string]http.HandlerFunc
+
+func (m methodMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if handler := m[r.Method]; handler != nil {
+		handler(w, r)
+		return
+	}
+
+	allow := make([]string, 0, len(m)+1)
+	for method := range m {
+		allow = append(allow, method)
+	}
+
+	allow = append(allow, http.MethodOptions)
+	sort.Strings(allow)
+	w.Header().Set("Allow", strings.Join(allow, ", "))
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
 
 type Server struct {
 	svc *service.FAQService
@@ -32,97 +65,38 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("/questions/", s.handleQuestions)
-	s.mux.HandleFunc("/answers/", s.handleAnswers)
+	s.mux.Handle("/swagger/", httpSwagger.WrapHandler)
+
+	s.mux.Handle("/questions", methodMux{
+		http.MethodGet:  s.listQuestions,
+		http.MethodPost: s.createQuestion,
+	})
+
+	s.mux.Handle("/questions/{questionID}", methodMux{
+		http.MethodGet:    s.getQuestion,
+		http.MethodDelete: s.deleteQuestion,
+	})
+
+	s.mux.Handle("/questions/{questionID}/answers", methodMux{
+		http.MethodPost: s.createAnswer,
+	})
+
+	s.mux.Handle("/answers/{answerID}", methodMux{
+		http.MethodGet:    s.getAnswer,
+		http.MethodDelete: s.deleteAnswer,
+	})
 }
 
-func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/questions")
-
-	if path == "" || path == "/" {
-		switch r.Method {
-		case http.MethodGet:
-			s.listQuestions(w, r)
-		case http.MethodPost:
-			s.createQuestion(w, r)
-		default:
-			http.Error(w, "metod not allowed", http.StatusMethodNotAllowed)
-		}
-
-		return
-	}
-
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-
-	if len(parts) == 1 {
-		// /questions/{id}
-		id, err := strconv.ParseUint(parts[0], 10, 64)
-
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
-		}
-
-		switch r.Method {
-		case http.MethodGet:
-			s.getQuestion(w, r, uint(id))
-		case http.MethodDelete:
-			s.deleteQuestion(w, r, uint(id))
-		default:
-			http.Error(w, "metod not allowed", http.StatusMethodNotAllowed)
-
-		}
-		return
-	}
-
-	if len(parts) == 2 && parts[1] == "answers" {
-		// /questions/{id}/answers
-		id, err := strconv.ParseUint(parts[0], 10, 64)
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
-		}
-
-		if r.Method == http.MethodPost {
-			s.createAnswer(w, r, uint(id))
-			return
-		}
-
-		http.Error(w, "metod not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	http.NotFound(w, r)
-}
-
-func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/answers/")
-
-	if path == "" {
-		http.NotFound(w, r)
-		return
-	}
-
-	id, err := strconv.ParseUint(strings.Trim(path, "/"), 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		s.getAnswer(w, r, uint(id))
-	case http.MethodDelete:
-		s.deleteAnswer(w, r, uint(id))
-	default:
-		http.Error(w, "metod not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-type createQuestionRequest struct {
-	Text string `json:"text"`
-}
-
+// createQuestion godoc
+// @Summary Create question
+// @Description Create and returns created question
+// @Tags questions
+// @Accept json
+// @Produce json
+// @Param request body createQuestionRequest true "Question payload"
+// @Success 201 {object} models.Question
+// @Failure 400 {object} map[string]string
+// @Router /questions [post]
 func (s *Server) createQuestion(w http.ResponseWriter, r *http.Request) {
 	var req createQuestionRequest
 
@@ -143,6 +117,14 @@ func (s *Server) createQuestion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, question)
 }
 
+// listQuestions godoc
+// @Summary List questions
+// @Description Returns questions
+// @Tags questions
+// @Produce json
+// @Success 200 {array} models.Question
+// @Failure 500 {object} map[string]string
+// @Router /questions [get]
 func (s *Server) listQuestions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	questions, err := s.svc.ListQuestions(ctx)
@@ -156,9 +138,25 @@ func (s *Server) listQuestions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, questions)
 }
 
-func (s *Server) getQuestion(w http.ResponseWriter, r *http.Request, id uint) {
+// getQuestion godoc
+// @Summary Get question by ID
+// @Tags questions
+// @Produce json
+// @Param questionID path int true "Question ID"
+// @Success 200 {object} models.Question
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /questions/{questionID} [get]
+func (s *Server) getQuestion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	question, err := s.svc.GetQuestionWithAnswers(ctx, id)
+	questionID, err := pathInt64(r, "questionID")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid question id")
+		return
+	}
+
+	question, err := s.svc.GetQuestionWithAnswers(ctx, uint(questionID))
 
 	if err != nil {
 		status := statusFromError(err)
@@ -169,10 +167,24 @@ func (s *Server) getQuestion(w http.ResponseWriter, r *http.Request, id uint) {
 	writeJSON(w, http.StatusOK, question)
 }
 
-func (s *Server) deleteQuestion(w http.ResponseWriter, r *http.Request, id uint) {
+// deleteQuestion godoc
+// @Summary Delete question
+// @Description Delete question by ID
+// @Tags questions
+// @Param questionID path int true "Question ID"
+// @Success 204
+// @Failure 400 {object} map[string]string
+// @Router /questions/{questionID} [delete]
+func (s *Server) deleteQuestion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if err := s.svc.DeleteQuestion(ctx, id); err != nil {
+	questionID, err := pathInt64(r, "questionID")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid question id")
+		return
+	}
+
+	if err := s.svc.DeleteQuestion(ctx, uint(questionID)); err != nil {
 		status := statusFromError(err)
 		http.Error(w, err.Error(), status)
 		return
@@ -181,20 +193,33 @@ func (s *Server) deleteQuestion(w http.ResponseWriter, r *http.Request, id uint)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type createAnswerRequest struct {
-	UserID string `json:"user_id"`
-	Text   string `json:"text"`
-}
-
-func (s *Server) createAnswer(w http.ResponseWriter, r *http.Request, questionID uint) {
+// createAnswer godoc
+// @Summary Create answer
+// @Description Create and returns created answer
+// @Tags answers
+// @Accept json
+// @Produce json
+// @Param questionID path int true "Question ID"
+// @Param request body createAnswerRequest true "Answer payload"
+// @Success 201 {object} models.Answer
+// @Failure 400 {object} map[string]string
+// @Router /questions/{questionID}/answers [post]
+func (s *Server) createAnswer(w http.ResponseWriter, r *http.Request) {
 	var req createAnswerRequest
+
+	questionID, err := pathInt64(r, "questionID")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid question id")
+		return
+	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
 
 	ctx := r.Context()
-	answer, err := s.svc.CreateAnswer(ctx, questionID, req.UserID, req.Text)
+	answer, err := s.svc.CreateAnswer(ctx, uint(questionID), req.UserID, req.Text)
 	if err != nil {
 		status := statusFromError(err)
 		http.Error(w, err.Error(), status)
@@ -204,9 +229,24 @@ func (s *Server) createAnswer(w http.ResponseWriter, r *http.Request, questionID
 	writeJSON(w, http.StatusCreated, answer)
 }
 
-func (s *Server) getAnswer(w http.ResponseWriter, r *http.Request, id uint) {
+// getAnswer godoc
+// @Summary  Get answer by ID
+// @Tags answers
+// @Produce json
+// @Param answerID path int true "Answer ID"
+// @Success 200 {object} models.Answer
+// @Failure 400 {object} map[string]string
+// @Router /answers/{answerID} [get]
+func (s *Server) getAnswer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	answer, err := s.svc.GetAnswer(ctx, id)
+
+	answerID, err := pathInt64(r, "answerID")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid answer id")
+		return
+	}
+
+	answer, err := s.svc.GetAnswer(ctx, uint(answerID))
 
 	if err != nil {
 		status := statusFromError(err)
@@ -217,40 +257,28 @@ func (s *Server) getAnswer(w http.ResponseWriter, r *http.Request, id uint) {
 	writeJSON(w, http.StatusOK, answer)
 }
 
-func (s *Server) deleteAnswer(w http.ResponseWriter, r *http.Request, id uint) {
+// deleteAnswer godoc
+// @Summary Delete answer
+// @Description Delete answer by ID
+// @Tags answers
+// @Param answerID path int true "Answer ID"
+// @Success 204
+// @Failure 400 {object} map[string]string
+// @Router /answers/{answerID} [delete]
+func (s *Server) deleteAnswer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if err := s.svc.DeleteAnswer(ctx, id); err != nil {
+	answerID, err := pathInt64(r, "answerID")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid answer id")
+		return
+	}
+
+	if err := s.svc.DeleteAnswer(ctx, uint(answerID)); err != nil {
 		status := statusFromError(err)
 		http.Error(w, err.Error(), status)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func statusFromError(err error) int {
-	switch err {
-	case service.ErrBadRequest:
-		return http.StatusBadRequest
-	case service.ErrNotFound, service.ErrNoSuchQuestion:
-		return http.StatusNotFound
-	default:
-		return http.StatusInternalServerError
-	}
-}
-
-func Logging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		log.Printf("%s %s", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s done in %s", r.Method, r.URL.Path, time.Since(start))
-	})
 }

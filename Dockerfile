@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22 AS builder
+FROM golang:1.23 AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux COARCH=amd64 go build -o /faq-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /faq-api ./cmd/api
 
 # Runtime stage
 FROM alpine:3.20

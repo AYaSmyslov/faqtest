@@ -1,3 +1,7 @@
+// @title frequently asked questions api
+// @version 1.0
+// @description REST API DOC
+// @BasePath /
 package main
 
 import (
@@ -5,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/AYaSmyslov/faqapi/docs"
 	httpapi "github.com/AYaSmyslov/faqapi/internal/http"
 	"github.com/AYaSmyslov/faqapi/internal/service"
 	"github.com/AYaSmyslov/faqapi/internal/storage"
